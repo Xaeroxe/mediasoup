@@ -63,7 +63,7 @@ libwebrtc = library(
   dependencies: [
     local_include_directories,
     libuv_proj.get_variable('libuv_dep'),
-    openssl_proj.get_variable('openssl_dep'),
+    openssl_dep,
     abseil_cpp_proj.get_variable('absl_strings_dep'),
     abseil_cpp_proj.get_variable('absl_types_dep'),
     ankerl_unordered_dense_dep,

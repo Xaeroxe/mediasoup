@@ -138,12 +138,18 @@ fn main() {
         panic!("Failed to install Python invoke package")
     }
 
+    let mut meson_args = env::var("MESON_ARGS").unwrap_or_default();
+    if cfg!(feature = "system-openssl") {
+        meson_args.push_str(" -Dms_system_openssl=true");
+    }
+
     // Build
     if !Command::new(&python)
         .arg("-m")
         .arg("invoke")
         .arg("libmediasoup-worker")
         .env("PYTHONPATH", &pythonpath)
+        .env("MESON_ARGS", meson_args.trim())
         .env("MEDIASOUP_OUT_DIR", &mediasoup_out_dir)
         .env("MEDIASOUP_BUILDTYPE", build_type)
         // Force forward slashes on Windows too, otherwise Meson thinks path is not absolute 🤷
@@ -244,4 +250,12 @@ fn main() {
 
     println!("cargo:rustc-link-lib=static=mediasoup-worker");
     println!("cargo:rustc-link-search=native={out_dir}");
+
+    // After the worker, so the linker sees what it needs from them.
+    if cfg!(feature = "system-openssl") {
+        pkg_config::Config::new()
+            .atleast_version("3.0.0")
+            .probe("openssl")
+            .expect("The system-openssl feature needs OpenSSL 3 and its pkg-config file");
+    }
 }

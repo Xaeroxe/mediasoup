@@ -320,12 +320,18 @@ libuv_proj = subproject(
   ],
 )
 
-openssl_proj = subproject(
-  'openssl',
-  default_options: [
-    'warning_level=0',
-  ],
-)
+if get_option('ms_system_openssl')
+  # libsrtp3's own dependency('openssl') below then finds the same one.
+  openssl_dep = dependency('openssl', version: '>=3.0.0', allow_fallback: false)
+else
+  openssl_proj = subproject(
+    'openssl',
+    default_options: [
+      'warning_level=0',
+    ],
+  )
+  openssl_dep = openssl_proj.get_variable('openssl_dep')
+endif
 
 libsrtp3_proj = subproject(
   'libsrtp3',
@@ -351,7 +357,7 @@ subdir('fbs')
 
 dependencies = [
   libuv_proj.get_variable('libuv_dep'),
-  openssl_proj.get_variable('openssl_dep'),
+  openssl_dep,
   libsrtp3_proj.get_variable('libsrtp3_dep'),
   ankerl_unordered_dense_dep,
   flatbuffers_proj.get_variable('flatbuffers_dep'),
@@ -360,11 +366,16 @@ dependencies = [
 
 link_whole = [
   libuv_proj.get_variable('libuv'),
-  openssl_proj.get_variable('libcrypto_lib'),
-  openssl_proj.get_variable('libssl_lib'),
   libsrtp3_proj.get_variable('libsrtp3'),
   flatbuffers_proj.get_variable('flatbuffers_lib'),
 ]
+
+if not get_option('ms_system_openssl')
+  link_whole += [
+    openssl_proj.get_variable('libcrypto_lib'),
+    openssl_proj.get_variable('libssl_lib'),
+  ]
+endif
 
 if not get_option('ms_use_builtin_bwe')
   # NOTE: abseil-cpp is in the tree only because deps/libwebrtc needs it.
