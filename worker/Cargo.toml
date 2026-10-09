@@ -50,6 +50,6 @@ features = ["derive"]
 version = "1.0.190"
 
 [features]
-# Link the system's OpenSSL (found by pkg-config) instead of building OpenSSL 3.0.8 from the
-# Meson subproject and linking it statically.
+# Link the system's OpenSSL (found by pkg-config) instead of building
+# OpenSSL 3.0.8 from the Meson subproject and linking it statically.
 system-openssl = ["dep:pkg-config"]

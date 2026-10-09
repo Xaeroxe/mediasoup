@@ -2,6 +2,8 @@
 
 ### NEXT
 
+- Worker: New `ms_system_openssl` Meson option to link the system OpenSSL dynamically instead of the bundled one (e.g. `MESON_ARGS="-Dms_system_openssl=true" npm i`).
+
 ### 3.27.1
 
 - Worker: Fix endless regeneration of FlatBuffers generated headers ([PR #1926](https://github.com/versatica/mediasoup/pull/1926)).
