@@ -3,6 +3,7 @@
 ### NEXT
 
 - Worker: New `ms_system_openssl` Meson option to link the system OpenSSL dynamically instead of the bundled one (e.g. `MESON_ARGS="-Dms_system_openssl=true" npm i`).
+- Worker: Fix crash in the DTLS handshake with OpenSSL 3.0 or 3.1 built with kernel TLS: the outgoing BIO callback answered every `BIO_ctrl()` with 1.
 
 ### 3.29.0
 
