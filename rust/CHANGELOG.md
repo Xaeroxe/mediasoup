@@ -2,6 +2,8 @@
 
 ### NEXT
 
+- New `system-openssl` Cargo feature to link the system OpenSSL dynamically instead of the bundled one.
+
 ### 0.30.0
 
 - Worker: Add more logs with "message" log tag ([PR #1966](https://github.com/versatica/mediasoup/pull/1966)).

@@ -7,3 +7,4 @@ option('ms_dump_rtp_shared_packet_memory_usage', type: 'boolean', value: false, 
 option('ms_build_tests', type: 'boolean', value: false, description: 'Must be enabled when building mediasoup worker tests')
 option('ms_build_fuzzer', type: 'boolean', value: false, description: 'Must be enabled when building mediasoup worker fuzzer')
 option('ms_use_builtin_bwe', type: 'boolean', value: false, description: 'Use the new built-in bandwidth estimation module')
+option('ms_system_openssl', type: 'boolean', value: false, description: 'Link the system OpenSSL (found by pkg-config, linked dynamically) instead of building the bundled one')

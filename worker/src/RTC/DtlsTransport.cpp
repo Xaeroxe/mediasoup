@@ -70,7 +70,13 @@ inline static long onSslBioOut(
 {
 	MS_TRACE();
 
-	const long resultOfcallback = (operationType == BIO_CB_RETURN) ? static_cast<long>(ret) : 1;
+	// OpenSSL calls back after every operation with BIO_CB_RETURN or'ed into the
+	// operation type, and takes what this returns as the operation's result, so
+	// it must be |ret| unchanged. Returning 1 there would answer every BIO_ctrl()
+	// with 1: OpenSSL 3.0 and 3.1, built with kernel TLS, then take this memory
+	// BIO for a kernel TLS socket (BIO_get_ktls_send()) and never allocate the
+	// DTLS write buffer, crashing on the first record they write.
+	const long resultOfcallback = (operationType & BIO_CB_RETURN) ? static_cast<long>(ret) : 1;
 
 	// This callback is called twice for write operations:
 	// - First one with operationType = BIO_CB_WRITE.

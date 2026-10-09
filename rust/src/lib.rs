@@ -23,6 +23,12 @@
 //! There are some requirements for building underlying C++ `mediasoup-worker`, please find them in
 //! [installation instructions](https://mediasoup.org/documentation/v3/mediasoup/installation/)
 //!
+//! # Cargo features
+//! * `system-openssl`: build the worker against the system's OpenSSL 3, found by `pkg-config` and
+//!   linked dynamically, instead of building the bundled OpenSSL and linking it statically. The
+//!   system's OpenSSL then receives its security updates from the operating system, and a program
+//!   that also uses OpenSSL elsewhere (through the `openssl` crate, say) has a single copy of it.
+//!
 //! # Examples
 //! There are some examples in `examples` and `examples-frontend` directories (for server- and
 //! client-side respectively), you may want to look at those to get a general idea of what API looks

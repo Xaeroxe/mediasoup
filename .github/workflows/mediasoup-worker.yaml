@@ -149,6 +149,41 @@ jobs:
             run-test: true
             run-test-asan-address: false
             run-test-asan-undefined: false
+          # The oldest OpenSSL 3 an Ubuntu LTS ships (3.0.2), a later one with
+          # both sanitizers, and on ARM.
+          - os: ubuntu-22.04
+            cc: gcc
+            cxx: g++
+            build-type: Release
+            run-lint: false
+            run-test: true
+            run-test-asan-address: false
+            run-test-asan-undefined: false
+            system-openssl: true
+            meson_args: '-Dms_system_openssl=true'
+          - os: ubuntu-26.04
+            cc: clang
+            cxx: clang++
+            build-type: Release
+            pip-break-system-packages: true
+            run-lint: false
+            run-test: true
+            run-test-asan-address: true
+            run-test-asan-undefined: true
+            system-openssl: true
+            meson_args: '-Dms_system_openssl=true'
+          - os: ubuntu-24.04-arm
+            cc: gcc
+            cxx: g++
+            build-type: Release
+            pip-break-system-packages: true
+            # No clang-format for ARM.
+            run-lint: false
+            run-test: true
+            run-test-asan-address: false
+            run-test-asan-undefined: false
+            system-openssl: true
+            meson_args: '-Dms_system_openssl=true'
           - os: macos-15
             cc: clang
             cxx: clang++
@@ -239,6 +274,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes clang-format-23
 
+      - if: ${{ matrix.build.system-openssl }}
+        name: apt install libssl-dev pkg-config
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libssl-dev pkg-config
+          echo "OpenSSL $(pkg-config --modversion openssl)"
+
       # We need to install npm deps of worker/scripts/package.json.
       - if: ${{ matrix.build.run-lint }}
         name: npm ci --prefix worker/scripts
@@ -254,6 +296,22 @@ jobs:
       - if: ${{ matrix.build.run-test }}
         name: invoke -r worker test
         run: invoke -r worker test
+
+      # The worker and its tests load the system libssl and libcrypto, and take
+      # OpenSSL's functions from them: a statically linked copy would leave
+      # `SSL_CTX_new` defined in the executable rather than undefined.
+      - if: ${{ matrix.build.system-openssl }}
+        name: Check that the worker links the system OpenSSL
+        run: |
+          set -euo pipefail
+          check() {
+            ldd "$1" | grep -E 'lib(ssl|crypto)\.so\.3'
+            nm -D --undefined-only "$1" | grep -w SSL_CTX_new
+          }
+          check worker/out/${{ matrix.build.build-type }}/mediasoup-worker
+          if [ "${{ matrix.build.run-test }}" = "true" ]; then
+            check worker/out/${{ matrix.build.build-type }}/mediasoup-worker-test
+          fi
 
       # NOTE: No need to clean anything before, since ASAN tests use their own
       # build directory.
