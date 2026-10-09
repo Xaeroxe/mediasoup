@@ -134,6 +134,25 @@ namespace RTC
 		{
 			MS_TRACE();
 
+			// NOTE: Both counts come from the options this was built with, never from
+			// anything received, so a window they don't fit in is a programming error.
+			MS_ASSERT(
+			  this->options.beginningPackets >= 1 && this->options.beginningPackets < this->delayHist.size(),
+			  "beginning packets don't fit in the window [beginningPackets:%zu, window:%zu]",
+			  this->options.beginningPackets,
+			  this->delayHist.size());
+			MS_ASSERT(
+			  this->options.endPackets >= 1 && this->options.endPackets < this->delayHist.size(),
+			  "end packets don't fit in the window [endPackets:%zu, window:%zu]",
+			  this->options.endPackets,
+			  this->delayHist.size());
+			MS_ASSERT(
+			  this->options.beginningPackets + this->options.endPackets <= this->delayHist.size(),
+			  "beginning and end packets overlap [beginningPackets:%zu, endPackets:%zu, window:%zu]",
+			  this->options.beginningPackets,
+			  this->options.endPackets,
+			  this->delayHist.size());
+
 			// The least delayed sample of the beginning of the window.
 			PacketTiming early = this->delayHist[0];
 
@@ -278,16 +297,16 @@ namespace RTC
 		{
 			MS_TRACE();
 
-			if (!this->lastThresholdUpdateAtUs.has_value())
+			if (!this->lastSampleArrivalTimeUs.has_value())
 			{
-				this->lastThresholdUpdateAtUs = arrivalTimeUs;
+				this->lastSampleArrivalTimeUs = arrivalTimeUs;
 			}
 
 			// Avoid adapting the threshold to big latency spikes, caused for instance
 			// by a sudden capacity drop.
 			if (std::fabs(modifiedTrend) > this->threshold + MaxAdaptOffset)
 			{
-				this->lastThresholdUpdateAtUs = arrivalTimeUs;
+				this->lastSampleArrivalTimeUs = arrivalTimeUs;
 
 				return;
 			}
@@ -299,13 +318,13 @@ namespace RTC
 			// NOTE: The coefficients above are rates per millisecond, so the step is
 			// expressed in those units no matter that the instants are microseconds.
 			const double elapsedMs = std::min(
-			  static_cast<double>(arrivalTimeUs - this->lastThresholdUpdateAtUs.value()) / 1000.0,
+			  static_cast<double>(arrivalTimeUs - this->lastSampleArrivalTimeUs.value()) / 1000.0,
 			  static_cast<double>(MaxThresholdUpdateDeltaMs));
 
 			this->threshold += coef * (std::fabs(modifiedTrend) - this->threshold) * elapsedMs;
 			this->threshold = std::clamp(this->threshold, ThresholdMin, ThresholdMax);
 
-			this->lastThresholdUpdateAtUs = arrivalTimeUs;
+			this->lastSampleArrivalTimeUs = arrivalTimeUs;
 		}
 	} // namespace BWE
 } // namespace RTC

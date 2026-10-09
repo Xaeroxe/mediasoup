@@ -1475,7 +1475,7 @@ SCENARIO("RTP Packet", "[serializable][rtp][packet]")
 		// Requires Two-Bytes type extensions due to length > 16.
 		extensions.assign(
 		  {
-		    { RTC::RtpHeaderExtensionUri::Type::TIME_OFFSET, 1, 17, rtpCommon::DataBuffer }
+		    { RTC::RtpHeaderExtensionUri::Type::ABS_CAPTURE_TIME, 1, 17, rtpCommon::DataBuffer }
     });
 		packet->SetExtensions(RTC::RTP::Packet::ExtensionsType::Auto, extensions);
 		REQUIRE(packet->HasTwoBytesExtensions());
@@ -1488,15 +1488,19 @@ SCENARIO("RTP Packet", "[serializable][rtp][packet]")
 
 		std::vector<RTC::RTP::Packet::Extension> extensions;
 
+		const uint32_t absSendtime{ 12345678 };
+		const uint16_t wideSeqNumber{ 5555 };
+		const uint64_t absCaptureTimestamp{ 0x83AA7E8000000000 };
+
 		std::string mid{ "mid-€1" };
 		std::string rid{ "r1-ß" };
-		uint32_t absSendtime{ 12345678 };
-		uint16_t wideSeqNumber{ 5555 };
 		uint8_t absSendtimeValue[100]{};
 		uint8_t wideSeqNumberValue[100]{};
+		uint8_t absCaptureTimeValue[100]{};
 
 		Utils::Byte::Set3Bytes(absSendtimeValue, 0, absSendtime);
 		Utils::Byte::Set2Bytes(wideSeqNumberValue, 0, wideSeqNumber);
+		Utils::Byte::Set8Bytes(absCaptureTimeValue, 0, absCaptureTimestamp);
 
 		// clang-format off
 		extensions.assign(
@@ -1524,6 +1528,12 @@ SCENARIO("RTP Packet", "[serializable][rtp][packet]")
 					4,
 					2,
 					wideSeqNumberValue
+				},
+				{
+					RTC::RtpHeaderExtensionUri::Type::ABS_CAPTURE_TIME,
+					5,
+					8,
+					absCaptureTimeValue
 				}
 			}
 		);
@@ -1537,6 +1547,8 @@ SCENARIO("RTP Packet", "[serializable][rtp][packet]")
 		std::string readRid;
 		uint32_t readAbsSendtime;
 		uint16_t readWideSeqNumber;
+		uint64_t readAbsCaptureTimestamp;
+		int64_t readEstimatedCaptureClockOffset;
 
 		REQUIRE(packet->ReadMid(readMid));
 		REQUIRE(readMid == mid);
@@ -1546,14 +1558,18 @@ SCENARIO("RTP Packet", "[serializable][rtp][packet]")
 		REQUIRE(readAbsSendtime == absSendtime);
 		REQUIRE(packet->ReadTransportWideCc01(readWideSeqNumber));
 		REQUIRE(readWideSeqNumber == wideSeqNumber);
+		REQUIRE(packet->ReadAbsCaptureTime(readAbsCaptureTimestamp, readEstimatedCaptureClockOffset));
+		REQUIRE(readAbsCaptureTimestamp == absCaptureTimestamp);
 
 		const std::string newMid{ "mid-®2" };
 		const int64_t newAbsSendtimeUs{ 999999250 };
 		const uint16_t newWideSeqNumber{ 5556 };
+		const uint64_t newAbsCaptureTimestamp{ 0x83AA7E8100000000 };
 
 		REQUIRE(packet->UpdateMid(newMid));
-		REQUIRE(packet->UpdateAbsSendTime(newAbsSendtimeUs));
+		REQUIRE(packet->UpdateAbsSendTime(Utils::Time::TimeUsToAbsSendTime(newAbsSendtimeUs)));
 		REQUIRE(packet->UpdateTransportWideCc01(newWideSeqNumber));
+		REQUIRE(packet->UpdateAbsCaptureTime(newAbsCaptureTimestamp));
 
 		REQUIRE(packet->ReadMid(readMid));
 		REQUIRE(readMid == newMid);
@@ -1563,6 +1579,8 @@ SCENARIO("RTP Packet", "[serializable][rtp][packet]")
 		REQUIRE(readAbsSendtime == Utils::Time::TimeUsToAbsSendTime(newAbsSendtimeUs));
 		REQUIRE(packet->ReadTransportWideCc01(readWideSeqNumber));
 		REQUIRE(readWideSeqNumber == newWideSeqNumber);
+		REQUIRE(packet->ReadAbsCaptureTime(readAbsCaptureTimestamp, readEstimatedCaptureClockOffset));
+		REQUIRE(readAbsCaptureTimestamp == newAbsCaptureTimestamp);
 
 		std::unique_ptr<RTC::RTP::Packet> packet2{ RTC::RTP::Packet::Parse(
 			packet->GetBuffer(), packet->GetLength()) };
@@ -2166,6 +2184,42 @@ SCENARIO("RTP Packet", "[serializable][rtp][packet]")
 		  /*paddingLength*/ 0);
 
 		REQUIRE(packet->IsPaddedTo4Bytes() == false);
+	}
+
+	SECTION("Packet::RtxEncode() does not write beyond the new packet length")
+	{
+		std::unique_ptr<RTC::RTP::Packet> packet{ RTC::RTP::Packet::Factory(
+			rtpCommon::FactoryBuffer, sizeof(rtpCommon::FactoryBuffer)) };
+
+		// clang-format off
+		uint8_t payload[] =
+		{
+			0x11, 0x22, 0x33, 0x44,
+			0x55, 0x66, 0x77, 0x88,
+			0x99, 0xAA
+		};
+		// clang-format on
+
+		packet->SetPayload(payload, 10);
+
+		const auto length = packet->GetLength();
+
+		REQUIRE(length == RTC::RTP::Packet::FixedHeaderMinLength + 10);
+
+		// Bytes that will belong to the packet once RTX encoded, and canary bytes
+		// right after them.
+		rtpCommon::FactoryBuffer[length]     = 0x55;
+		rtpCommon::FactoryBuffer[length + 1] = 0x55;
+		rtpCommon::FactoryBuffer[length + 2] = 0xEE;
+		rtpCommon::FactoryBuffer[length + 3] = 0xEE;
+
+		packet->RtxEncode(/*payloadType*/ 111, /*ssrc*/ 999999, /*seq*/ 666);
+
+		REQUIRE(packet->GetLength() == length + 2);
+		REQUIRE(packet->GetPayloadLength() == 12);
+		REQUIRE(rtpCommon::FactoryBuffer[length + 2] == 0xEE);
+		REQUIRE(rtpCommon::FactoryBuffer[length + 3] == 0xEE);
+		REQUIRE(std::memcmp(packet->GetPayload() + 2, payload, 10) == 0);
 	}
 
 	SECTION("Packet::SetBufferReleasedListener() when Packet is destroyed succeeds")

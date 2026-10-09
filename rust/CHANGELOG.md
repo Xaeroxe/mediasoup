@@ -4,10 +4,38 @@
 
 - New `system-openssl` Cargo feature to link the system OpenSSL dynamically instead of the bundled one.
 
+### 0.30.0
+
+- Worker: Add more logs with "message" log tag ([PR #1966](https://github.com/versatica/mediasoup/pull/1966)).
+- SCTP: Fix deferred stream reset with an empty stream list not deferring incoming data ([PR #1967](https://github.com/versatica/mediasoup/pull/1967)).
+- Worker: Space in time RTP retransmissions triggered by NACKs ([PR #1965](https://github.com/versatica/mediasoup/pull/1965)).
+- Remove `rtpPacketLossReceived` and `rtpPacketLossSent` transport custom stats ([PR #1968](https://github.com/versatica/mediasoup/pull/1968)).
+- Store used SCTP stream ids in a Vec instead of an IntMap ([PR #1975](https://github.com/versatica/mediasoup/pull/1975)).
+- `RtpStreamSend`: Don't count the sender's uplink loss as loss of the consumer link ([PR #1974](https://github.com/versatica/mediasoup/pull/1974)).
+  - **Breaking change:** `consumer.getStats()` now reports `fractionLost` and `packetsLost` of its send streams counting only the loss of the downlink to the consuming peer.
+- SCTP: Add `sctpZeroChecksum` option to enable SCTP Zero Checksum (RFC 9653) ([PR #1977](https://github.com/versatica/mediasoup/pull/1977)).
+- Worker: Compute CRC32 and CRC32c with the slice-by-8 algorithm ([PR #1976](https://github.com/versatica/mediasoup/pull/1976)).
+- Fix: Do not panic when JSON `RtpParameters` include an unsupported RTP header extension URI ([PR #1980](https://github.com/versatica/mediasoup/pull/1980)).
+- Worker: Update Meson subprojects ([PR #1981](https://github.com/versatica/mediasoup/pull/1981)).
+
+### 0.29.0
+
+- Worker: Fix MSVC compiler warnings ([PR #1937](https://github.com/versatica/mediasoup/pull/1937)).
+- Remove support for the `urn:ietf:params:rtp-hdrext:toffset` RTP extension ([PR #1942](https://github.com/versatica/mediasoup/pull/1942)).
+- Worker: Compute bitrate over the active window in `RateCalculator` ([PR #1944](https://github.com/versatica/mediasoup/pull/1944)).
+  - Make `RateCalculator::GetRate()` and `RtpDataCounter::GetBitrate()` return no value while there is nothing to measure.
+  - Widen the lifetime packet and byte counters of RTP streams to `uint64_t`.
+- Rust: Fix `ScalabilityMode::ksvc()` returning `false` for `L2T1_KEY`.
+- SCTP: Treat `max_retransmits: 0` and `max_packet_life_time: 0` as given in SCTP stream parameters ([PR #1956](https://github.com/versatica/mediasoup/pull/1956)).
+- Worker: Fix `RTP::Packet::RtxEncode()` writing 2 bytes beyond the end of the packet ([PR #1955](https://github.com/versatica/mediasoup/pull/1955)).
+- Worker: Fix RTT computed from RTCP reports when the compact NTP timestamp wraps around ([PR #1958](https://github.com/versatica/mediasoup/pull/1958)).
+- Worker: Fall back to Sender Reports when a negotiated 'abs-capture-time' never arrives ([PR #1964](https://github.com/versatica/mediasoup/pull/1964)).
+
 ### 0.28.1
 
 - Worker: Fix endless regeneration of FlatBuffers generated headers ([PR #1926](https://github.com/versatica/mediasoup/pull/1926)).
 - SCTP: Fix unbounded SCTP reassembly queue growth during deferred reset processing ([PR #1927](https://github.com/versatica/mediasoup/pull/1927)).
+- Worker: Refactor send callbacks ([PR #1930](https://github.com/versatica/mediasoup/pull/1930)).
 
 ### 0.28.0
 

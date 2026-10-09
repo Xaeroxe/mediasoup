@@ -11,7 +11,7 @@
 #include "RTC/SvcProducerStreamManager.hpp"
 #include "Utils.hpp"
 #ifdef MS_RTC_LOGGER_RTP
-#include "RTC/RtcLogger.hpp"
+#include "RTC/RtcLogger/RtpPacket.hpp"
 #endif
 #include <limits> // std::numeric_limits
 
@@ -717,9 +717,11 @@ namespace RTC
 				  newPreferredLayers.temporal,
 				  this->id.c_str());
 
-				preferredTemporalLayer     = newPreferredLayers.temporal;
+				preferredTemporalLayer     = static_cast<uint8_t>(newPreferredLayers.temporal);
 				auto preferredLayersOffset = FBS::Consumer::CreateConsumerLayers(
-				  request->GetBufferBuilder(), newPreferredLayers.spatial, preferredTemporalLayer);
+				  request->GetBufferBuilder(),
+				  static_cast<uint8_t>(newPreferredLayers.spatial),
+				  preferredTemporalLayer);
 				auto responseOffset = FBS::Consumer::CreateSetPreferredLayersResponse(
 				  request->GetBufferBuilder(), preferredLayersOffset);
 
@@ -814,7 +816,7 @@ namespace RTC
 				const auto* body = request->data->body_as<FBS::Consumer::EnableTraceEventRequest>();
 
 				// Reset traceEventTypes.
-				struct TraceEventTypes newTraceEventTypes;
+				TraceEventTypes newTraceEventTypes;
 
 				for (const auto& type : *body->events())
 				{
@@ -865,6 +867,32 @@ namespace RTC
 				MS_THROW_ERROR("unknown method '%s'", request->methodCStr);
 			}
 		}
+	}
+
+	bool Consumer::SupportsTransportCc() const
+	{
+		MS_TRACE();
+
+		return this->rtpHeaderExtensionIds.transportWideCc01 != 0u &&
+		       std::ranges::any_of(
+		         this->rtpParameters.codecs,
+		         [](const RTC::RtpCodecParameters& codec)
+		         {
+			         return codec.HasRtcpFeedbackType("transport-cc");
+		         });
+	}
+
+	bool Consumer::SupportsRemb() const
+	{
+		MS_TRACE();
+
+		return this->rtpHeaderExtensionIds.absSendTime != 0u &&
+		       std::ranges::any_of(
+		         this->rtpParameters.codecs,
+		         [](const RTC::RtpCodecParameters& codec)
+		         {
+			         return codec.HasRtcpFeedbackType("goog-remb");
+		         });
 	}
 
 	void Consumer::TransportConnected()
@@ -1524,13 +1552,14 @@ namespace RTC
 		}
 	}
 
-	void Consumer::ReceiveRtcpReceiverReport(RTC::RTCP::ReceiverReport* report, int64_t receivedAtUs)
+	std::optional<RTC::RTP::RtpStreamSend::Loss> Consumer::ReceiveRtcpReceiverReport(
+	  RTC::RTCP::ReceiverReport* report, int64_t receivedAtUs)
 	{
 		MS_TRACE();
 
 		auto* rtpStream = this->mapSsrcRtpStream.at(report->GetSsrc());
 
-		rtpStream->ReceiveRtcpReceiverReport(report, receivedAtUs);
+		return rtpStream->ReceiveRtcpReceiverReport(report, receivedAtUs);
 	}
 
 	void Consumer::ReceiveRtcpXrReceiverReferenceTime(
@@ -1823,8 +1852,8 @@ namespace RTC
 		{
 			layersOffset = FBS::Consumer::CreateConsumerLayers(
 			  this->shared->GetChannelNotifier()->GetBufferBuilder(),
-			  this->producerStreamManager->GetCurrentSpatialLayer(),
-			  this->producerStreamManager->GetCurrentTemporalLayer());
+			  static_cast<uint8_t>(this->producerStreamManager->GetCurrentSpatialLayer()),
+			  static_cast<uint8_t>(this->producerStreamManager->GetCurrentTemporalLayer()));
 		}
 
 		auto notificationOffset = FBS::Consumer::CreateLayersChangeNotification(

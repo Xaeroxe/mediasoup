@@ -25,7 +25,6 @@ use mediasoup_types::data_structures::{
 };
 use mediasoup_types::rtp_parameters::{MediaKind, RtpEncodingParameters};
 use mediasoup_types::sctp_parameters::SctpStreamParameters;
-use nohash_hasher::IntMap;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -442,7 +441,7 @@ pub(super) trait TransportImpl: TransportGeneric {
     /// Used by allocate_sctp_stream_id() to guard against exceeding negotiated limit.
     fn sctp_negotiated_max_outbound_streams(&self) -> Option<u16>;
 
-    fn used_sctp_stream_ids(&self) -> &Mutex<IntMap<u16, bool>>;
+    fn used_sctp_stream_ids(&self) -> &Mutex<Vec<bool>>;
 
     fn next_sctp_stream_id(&self) -> &Mutex<u16>;
 
@@ -459,15 +458,18 @@ pub(super) trait TransportImpl: TransportGeneric {
             }
         }
 
-        let len = 65535u32;
-        let start = *next_guard as u32;
+        let len = used.len();
+        let start = *next_guard as usize;
 
         for i in 0..len {
-            let candidate = ((start + i) % len) as u16;
-            if let Some(is_used) = used.get_mut(&candidate) {
+            let candidate = (start + i) % len;
+            if let Some(is_used) = used.get_mut(candidate) {
                 if !*is_used {
                     *is_used = true;
+
+                    let candidate = candidate as u16;
                     *next_guard = candidate.wrapping_add(1);
+
                     return Some(candidate);
                 }
             }
@@ -478,7 +480,7 @@ pub(super) trait TransportImpl: TransportGeneric {
 
     fn deallocate_sctp_stream_id(&self, sctp_stream_id: u16) {
         let used_sctp_stream_ids = self.used_sctp_stream_ids();
-        if let Some(used) = used_sctp_stream_ids.lock().get_mut(&sctp_stream_id) {
+        if let Some(used) = used_sctp_stream_ids.lock().get_mut(sctp_stream_id as usize) {
             *used = false;
         }
     }
@@ -852,15 +854,12 @@ pub(super) trait TransportImpl: TransportGeneric {
                         sctp_stream_parameters.max_retransmits = None;
                     }
                 }
-                if ordered != Some(true) {
-                    if let Some(max_packet_life_time) = max_packet_life_time {
-                        sctp_stream_parameters.ordered = false;
-                        sctp_stream_parameters.max_packet_life_time = Some(max_packet_life_time);
-                    }
-                    if let Some(max_retransmits) = max_retransmits {
-                        sctp_stream_parameters.ordered = false;
-                        sctp_stream_parameters.max_retransmits = Some(max_retransmits);
-                    }
+                if ordered != Some(true)
+                    && (max_packet_life_time.is_some() || max_retransmits.is_some())
+                {
+                    sctp_stream_parameters.ordered = false;
+                    sctp_stream_parameters.max_packet_life_time = max_packet_life_time;
+                    sctp_stream_parameters.max_retransmits = max_retransmits;
                 }
 
                 Some(sctp_stream_parameters)

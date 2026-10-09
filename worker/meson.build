@@ -23,6 +23,11 @@ if host_machine.system() == 'windows'
     '-D_SCL_SECURE_NO_WARNINGS',
     # Introduced in VS 2017 15.8, allow overaligned types in aligned_storage.
     '-D_ENABLE_EXTENDED_ALIGNED_STORAGE',
+    # Don't warn about flexible array members (a C99 feature that C++ lacks and
+    # every compiler offers as an extension). They are how RTP and RTCP headers
+    # give a name to the bytes that follow them, so their length is part of the
+    # parsing arithmetic and cannot be declared.
+    '/wd4200',
   ]
 endif
 
@@ -41,6 +46,12 @@ endif
 if get_option('ms_rtc_logger_rtp')
   cpp_args += [
     '-DMS_RTC_LOGGER_RTP',
+  ]
+endif
+
+if get_option('ms_rtc_logger_send_burst')
+  cpp_args += [
+    '-DMS_RTC_LOGGER_SEND_BURST',
   ]
 endif
 
@@ -132,7 +143,8 @@ common_sources = [
   'src/RTC/RemoteCaptureTimeEstimator.cpp',
   'src/RTC/RemoteClockOffsetEstimator.cpp',
   'src/RTC/Router.cpp',
-  'src/RTC/RtcLogger.cpp',
+  'src/RTC/RtcLogger/RtpPacket.cpp',
+  'src/RTC/RtcLogger/SendBurst.cpp',
   'src/RTC/RtpListener.cpp',
   'src/RTC/RtpObserver.cpp',
   'src/RTC/SctpListener.cpp',
@@ -164,17 +176,32 @@ common_sources = [
   'src/RTC/RtpDictionaries/RtpRtxParameters.cpp',
   'src/RTC/SctpDictionaries/SctpStreamParameters.cpp',
   'src/RTC/BWE/AimdRateControl.cpp',
+  'src/RTC/BWE/AlrDetector.cpp',
+  'src/RTC/BWE/BitrateProber.cpp',
+  'src/RTC/BWE/BitrateUtils.cpp',
   'src/RTC/BWE/BweTypes.cpp',
   'src/RTC/BWE/DelayBasedBwe.cpp',
   'src/RTC/BWE/FeedbackAdapter.cpp',
+  'src/RTC/BWE/InterArrival.cpp',
   'src/RTC/BWE/InterArrivalDelta.cpp',
+  'src/RTC/BWE/IntervalBudget.cpp',
   'src/RTC/BWE/LinkCapacityEstimator.cpp',
   'src/RTC/BWE/LossBasedController.cpp',
+  'src/RTC/BWE/OveruseDetector.cpp',
+  'src/RTC/BWE/OveruseEstimator.cpp',
+  'src/RTC/BWE/ProbeBitrateEstimator.cpp',
+  'src/RTC/BWE/ProbeController.cpp',
+  'src/RTC/BWE/ProbePacketGenerator.cpp',
+  'src/RTC/BWE/ProbingScheduler.cpp',
+  'src/RTC/BWE/ReceiverTransportCongestionController.cpp',
+  'src/RTC/BWE/RembGenerator.cpp',
+  'src/RTC/BWE/SenderTransportCongestionController.cpp',
+  'src/RTC/BWE/RemoteBitrateEstimatorAbsSendTime.cpp',
   'src/RTC/BWE/RobustThroughputEstimator.cpp',
   'src/RTC/BWE/SendPacketHistory.cpp',
   'src/RTC/BWE/TargetRateController.cpp',
+  'src/RTC/BWE/TransportWideCcFeedbackGenerator.cpp',
   'src/RTC/BWE/TrendlineEstimator.cpp',
-  'src/RTC/BWE/Utils.cpp',
   'src/RTC/ICE/IceCandidate.cpp',
   'src/RTC/ICE/IceServer.cpp',
   'src/RTC/ICE/StunPacket.cpp',
@@ -484,17 +511,32 @@ test_sources = [
   'test/src/RTC/TestTransportTuple.cpp',
   'test/src/RTC/TestTrendCalculator.cpp',
   'test/src/RTC/BWE/helpers/LinkSimulator.cpp',
+  'test/src/RTC/BWE/helpers/RemoteBitrateEstimatorAbsSendTimeTestHelper.cpp',
   'test/src/RTC/BWE/TestAimdRateControl.cpp',
+  'test/src/RTC/BWE/TestAlrDetector.cpp',
+  'test/src/RTC/BWE/TestBitrateProber.cpp',
+  'test/src/RTC/BWE/TestBitrateUtils.cpp',
   'test/src/RTC/BWE/TestDelayBasedBwe.cpp',
   'test/src/RTC/BWE/TestFeedbackAdapter.cpp',
+  'test/src/RTC/BWE/TestInterArrival.cpp',
   'test/src/RTC/BWE/TestInterArrivalDelta.cpp',
+  'test/src/RTC/BWE/TestIntervalBudget.cpp',
   'test/src/RTC/BWE/TestLinkCapacityEstimator.cpp',
   'test/src/RTC/BWE/TestLossBasedController.cpp',
+  'test/src/RTC/BWE/TestOveruseDetector.cpp',
+  'test/src/RTC/BWE/TestProbeBitrateEstimator.cpp',
+  'test/src/RTC/BWE/TestProbeController.cpp',
+  'test/src/RTC/BWE/TestProbePacketGenerator.cpp',
+  'test/src/RTC/BWE/TestProbingScheduler.cpp',
+  'test/src/RTC/BWE/TestReceiverTransportCongestionController.cpp',
+  'test/src/RTC/BWE/TestRembGenerator.cpp',
+  'test/src/RTC/BWE/TestSenderTransportCongestionController.cpp',
+  'test/src/RTC/BWE/TestRemoteBitrateEstimatorAbsSendTime.cpp',
   'test/src/RTC/BWE/TestRobustThroughputEstimator.cpp',
   'test/src/RTC/BWE/TestSendPacketHistory.cpp',
   'test/src/RTC/BWE/TestTargetRateController.cpp',
+  'test/src/RTC/BWE/TestTransportWideCcFeedbackGenerator.cpp',
   'test/src/RTC/BWE/TestTrendlineEstimator.cpp',
-  'test/src/RTC/BWE/TestUtils.cpp',
   'test/src/RTC/ICE/iceCommon.cpp',
   'test/src/RTC/ICE/TestStunPacket.cpp',
   'test/src/RTC/RTP/rtpCommon.cpp',

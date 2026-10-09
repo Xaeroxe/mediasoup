@@ -6,6 +6,7 @@
 #include "RTC/Parameters.hpp"
 #include <ankerl/unordered_dense.h>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace RTC
@@ -123,10 +124,9 @@ namespace RTC
 			SSRC_AUDIO_LEVEL       = 6,
 			DEPENDENCY_DESCRIPTOR  = 7,
 			VIDEO_ORIENTATION      = 8,
-			TIME_OFFSET            = 9,
-			ABS_CAPTURE_TIME       = 10,
-			PLAYOUT_DELAY          = 11,
-			MEDIASOUP_PACKET_ID    = 12
+			ABS_CAPTURE_TIME       = 9,
+			PLAYOUT_DELAY          = 10,
+			MEDIASOUP_PACKET_ID    = 11
 		};
 
 	public:
@@ -156,6 +156,12 @@ namespace RTC
 
 		flatbuffers::Offset<FBS::RtpParameters::RtpCodecParameters> FillBuffer(
 		  flatbuffers::FlatBufferBuilder& builder) const;
+
+		/**
+		 * Whether this codec was negotiated with the given RTCP feedback type, such
+		 * as "transport-cc" or "goog-remb".
+		 */
+		bool HasRtcpFeedbackType(std::string_view type) const;
 
 	private:
 		void CheckCodec() const;

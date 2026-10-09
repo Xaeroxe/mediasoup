@@ -10,7 +10,7 @@
 #include "RTC/RTP/Codecs/Tools.hpp"
 #include "Utils.hpp"
 #ifdef MS_RTC_LOGGER_RTP
-#include "RTC/RtcLogger.hpp"
+#include "RTC/RtcLogger/RtpPacket.hpp"
 #endif
 #include <cstring> // std::memcpy()
 
@@ -83,18 +83,22 @@ namespace RTC
 			}
 
 			// rid is optional.
+			const bool hasRid =
+			  flatbuffers::IsFieldPresent(encoding, FBS::RtpParameters::EncodingMapping::VT_RID);
+
+			if (hasRid)
+			{
+				encodingMapping.rid = encoding->rid()->str();
+			}
+
 			// However ssrc or rid must be present (if more than 1 encoding).
-			if (
-			  encodings->size() > 1 && !encoding->ssrc().has_value() &&
-			  !flatbuffers::IsFieldPresent(encoding, FBS::RtpParameters::EncodingMapping::VT_RID))
+			if (encodings->size() > 1 && !encoding->ssrc().has_value() && !hasRid)
 			{
 				MS_THROW_TYPE_ERROR("wrong entry in rtpMapping.encodings (missing ssrc or rid)");
 			}
 
 			// If there is no mid and a single encoding, ssrc or rid must be present.
-			if (
-			  this->rtpParameters.mid.empty() && encodings->size() == 1 && !encoding->ssrc().has_value() &&
-			  !flatbuffers::IsFieldPresent(encoding, FBS::RtpParameters::EncodingMapping::VT_RID))
+			if (this->rtpParameters.mid.empty() && encodings->size() == 1 && !encoding->ssrc().has_value() && !hasRid)
 			{
 				MS_THROW_TYPE_ERROR(
 				  "wrong entry in rtpMapping.encodings (missing ssrc or rid, or rtpParameters.mid)");
@@ -169,11 +173,6 @@ namespace RTC
 			if (this->rtpHeaderExtensionIds.videoOrientation == 0u && exten.type == RTC::RtpHeaderExtensionUri::Type::VIDEO_ORIENTATION)
 			{
 				this->rtpHeaderExtensionIds.videoOrientation = exten.id;
-			}
-
-			if (this->rtpHeaderExtensionIds.timeOffset == 0u && exten.type == RTC::RtpHeaderExtensionUri::Type::TIME_OFFSET)
-			{
-				this->rtpHeaderExtensionIds.timeOffset = exten.id;
 			}
 
 			if (this->rtpHeaderExtensionIds.absCaptureTime == 0u && exten.type == RTC::RtpHeaderExtensionUri::Type::ABS_CAPTURE_TIME)
@@ -268,7 +267,7 @@ namespace RTC
 			encodings.emplace_back(
 			  FBS::RtpParameters::CreateEncodingMappingDirect(
 			    builder,
-			    encodingMapping.rid.c_str(),
+			    encodingMapping.rid.empty() ? nullptr : encodingMapping.rid.c_str(),
 			    encodingMapping.ssrc != 0u ? flatbuffers::Optional<uint32_t>(encodingMapping.ssrc)
 					                           : flatbuffers::nullopt,
 			    encodingMapping.mappedSsrc));
@@ -445,7 +444,7 @@ namespace RTC
 				const auto* body = request->data->body_as<FBS::Producer::EnableTraceEventRequest>();
 
 				// Reset traceEventTypes.
-				struct TraceEventTypes newTraceEventTypes;
+				TraceEventTypes newTraceEventTypes;
 
 				for (const auto& type : *body->events())
 				{
@@ -548,6 +547,32 @@ namespace RTC
 				MS_ERROR("unknown event '%s'", notification->eventCStr);
 			}
 		}
+	}
+
+	bool Producer::SupportsTransportCc() const
+	{
+		MS_TRACE();
+
+		return this->rtpHeaderExtensionIds.transportWideCc01 != 0u &&
+		       std::ranges::any_of(
+		         this->rtpParameters.codecs,
+		         [](const RTC::RtpCodecParameters& codec)
+		         {
+			         return codec.HasRtcpFeedbackType("transport-cc");
+		         });
+	}
+
+	bool Producer::SupportsRemb() const
+	{
+		MS_TRACE();
+
+		return this->rtpHeaderExtensionIds.absSendTime != 0u &&
+		       std::ranges::any_of(
+		         this->rtpParameters.codecs,
+		         [](const RTC::RtpCodecParameters& codec)
+		         {
+			         return codec.HasRtcpFeedbackType("goog-remb");
+		         });
 	}
 
 	Producer::ReceiveRtpPacketResult Producer::ReceiveRtpPacket(
@@ -776,7 +801,7 @@ namespace RTC
 		// Add a receiver reference time report if no present in the packet.
 		if (!packet->HasReceiverReferenceTime())
 		{
-			auto ntp = Utils::Time::TimeUs2Ntp(nowUs + this->shared->GetNtpOffsetUs());
+			auto ntp = Utils::Time::TimeUsToNtp(nowUs + this->shared->GetNtpOffsetUs());
 
 			receiverReferenceTimeReport = new RTC::RTCP::ReceiverReferenceTime();
 
@@ -1259,7 +1284,7 @@ namespace RTC
 				// the most likely case rather than a wild guess.
 				const auto remoteClockOffsetUs = this->listener->OnProducerNeedRemoteClockOffsetUs(this);
 				const auto remoteClockOffsetQ32x32 =
-				  Utils::Time::TimeUs2Q32x32(remoteClockOffsetUs.value_or(0));
+				  Utils::Time::TimeUsToQ32x32(remoteClockOffsetUs.value_or(0));
 
 				// NOTE: An offset that does not fit in the extension means a sender whose clock
 				// is decades away from ours, and there is no value to write that would not be a
@@ -1397,22 +1422,6 @@ namespace RTC
 					extensions.emplace_back(
 					  /*type*/ RTC::RtpHeaderExtensionUri::Type::VIDEO_ORIENTATION,
 					  /*id*/ static_cast<uint8_t>(RTC::RtpHeaderExtensionUri::Type::VIDEO_ORIENTATION),
-					  /*len*/ extenLen,
-					  /*value*/ bufferPtr);
-
-					bufferPtr += extenLen;
-				}
-
-				// Proxy urn:ietf:params:rtp-hdrext:toffset.
-				extenValue = packet->GetExtensionValue(this->rtpHeaderExtensionIds.timeOffset, extenLen);
-
-				if (extenValue)
-				{
-					std::memcpy(bufferPtr, extenValue, extenLen);
-
-					extensions.emplace_back(
-					  /*type*/ RTC::RtpHeaderExtensionUri::Type::TIME_OFFSET,
-					  /*id*/ static_cast<uint8_t>(RTC::RtpHeaderExtensionUri::Type::TIME_OFFSET),
 					  /*len*/ extenLen,
 					  /*value*/ bufferPtr);
 

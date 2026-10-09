@@ -3,7 +3,8 @@
 
 #include "RTC/BWE/TargetRateController.hpp"
 #include "Logger.hpp"
-#include "RTC/BWE/Utils.hpp"
+#include "RTC/BWE/BitrateUtils.hpp"
+#include "RTC/Consts.hpp"
 
 namespace RTC
 {
@@ -22,10 +23,6 @@ namespace RTC
 		// Packets a loss report must cover before its fraction of lost packets says
 		// anything.
 		static constexpr int64_t LimitNumPackets{ 20 };
-		// Lowest bitrate this controller may ever produce.
-		static constexpr int64_t CongestionControllerMinBitrate{ 5000 };
-		// Upper bound used while the application sets no maximum.
-		static constexpr int64_t DefaultMaxBitrate{ 1000000000 };
 		// Age over which the latest loss report is not acted upon anymore. Reports
 		// are expected within [0.5, 1.5] s intervals, so this is 1.2 times the
 		// longest interval that still counts as uniform.
@@ -41,8 +38,8 @@ namespace RTC
 
 		TargetRateController::TargetRateController(TargetRateControllerOptions options)
 		  : options(options),
-		    minBitrateConfigured(CongestionControllerMinBitrate),
-		    maxBitrateConfigured(DefaultMaxBitrate)
+		    minBitrateConfigured(Consts::BweMinBitrate),
+		    maxBitrateConfigured(Consts::BweMaxBitrate)
 		{
 			MS_TRACE();
 
@@ -74,8 +71,8 @@ namespace RTC
 			this->lostPacketsSinceLastLossUpdate     = 0;
 			this->expectedPacketsSinceLastLossUpdate = 0;
 			this->currentTarget                      = 0;
-			this->minBitrateConfigured               = CongestionControllerMinBitrate;
-			this->maxBitrateConfigured               = DefaultMaxBitrate;
+			this->minBitrateConfigured               = Consts::BweMinBitrate;
+			this->maxBitrateConfigured               = Consts::BweMaxBitrate;
 			this->hasDecreasedSinceLastFractionLoss  = false;
 			this->lastFractionLost                   = 0;
 			this->lastRttUs                          = 0;
@@ -98,7 +95,7 @@ namespace RTC
 		{
 			MS_TRACE();
 
-			this->minBitrateConfigured = std::max(minBitrate, CongestionControllerMinBitrate);
+			this->minBitrateConfigured = std::max(minBitrate, Consts::BweMinBitrate);
 
 			// No maximum at all is not a maximum of every bitrate there is, it means
 			// that the one this controller picks for itself applies.
@@ -108,7 +105,7 @@ namespace RTC
 			}
 			else
 			{
-				this->maxBitrateConfigured = DefaultMaxBitrate;
+				this->maxBitrateConfigured = Consts::BweMaxBitrate;
 			}
 
 			this->lossBasedController.SetBitrateLimits(
@@ -260,7 +257,8 @@ namespace RTC
 					this->lastDecreaseAtUs = nowUs;
 
 					const auto bitrate = std::max<int64_t>(
-					  Utils::ApplyBitrateFactor(this->currentTarget, this->options.rttBackoffDropFraction),
+					  BitrateUtils::ApplyBitrateFactor(
+					    this->currentTarget, this->options.rttBackoffDropFraction),
 					  this->options.rttBackoffBitrateFloor);
 
 					SetTargetBitrate(bitrate);
@@ -336,8 +334,8 @@ namespace RTC
 					// that was throttled ramp up a second faster.
 					// Add a bit on top of the 8%, which is what keeps the target from
 					// getting stuck at low bitrates and is negligible at high ones.
-					const auto bitrate = Utils::AddBitrates(
-					  Utils::ApplyBitrateFactor(this->minBitrateHistory.front().second, 1.08), 1000);
+					const auto bitrate = BitrateUtils::AddBitrates(
+					  BitrateUtils::ApplyBitrateFactor(this->minBitrateHistory.front().second, 1.08), 1000);
 
 					SetTargetBitrate(bitrate);
 

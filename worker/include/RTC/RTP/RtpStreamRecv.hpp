@@ -1,6 +1,7 @@
 #ifndef MS_RTC_RTP_RTP_STREAM_RECV_HPP
 #define MS_RTC_RTP_RTP_STREAM_RECV_HPP
 
+#include "common.hpp"
 #include "handles/TimerHandleInterface.hpp"
 #include "RTC/NackGenerator.hpp"
 #include "RTC/RTCP/Packet.hpp"
@@ -77,9 +78,9 @@ namespace RTC
 
 				int64_t GetLayerBitrate(int64_t nowMs, uint8_t spatialLayer, uint8_t temporalLayer);
 
-				size_t GetPacketCount() const;
+				uint64_t GetPacketCount() const;
 
-				size_t GetBytes() const;
+				uint64_t GetBytes() const;
 
 			private:
 				std::vector<std::vector<RTC::RtpDataCounter>> spatialLayerCounters;
@@ -228,6 +229,20 @@ namespace RTC
 			std::optional<int64_t> GetRemoteCaptureAtUsFromAbsCaptureTime(uint32_t ts) const;
 
 			/**
+			 * Whether the 'abs-capture-time' RTP header extension has ever been received
+			 * on this stream.
+			 *
+			 * @remarks
+			 * - It is not the same as being able to tell a capture instant from it, which
+			 *   also depends on how far the wanted RTP timestamp falls from the one it
+			 *   referred to.
+			 */
+			bool HasAbsCaptureTime() const
+			{
+				return this->lastAbsCaptureTime.has_value();
+			}
+
+			/**
 			 * Capture instant of the given RTP timestamp, expressed in the remote sender's
 			 * wall clock, interpolated from the last received RTCP Sender Report.
 			 *
@@ -306,13 +321,17 @@ namespace RTC
 			bool useRtpInactivityCheck{ false };
 			// Others.
 			// Packets expected at last interval.
+			// NOTE: As wide as GetExpectedPackets(), which wraps with the sequence
+			// number, so that the difference against it is taken in its own width.
 			uint32_t expectedPrior{ 0 };
 			// Packets expected at last interval for score calculation.
 			uint32_t expectedPriorScore{ 0 };
 			// Packets received at last interval.
-			uint32_t receivedPrior{ 0 };
+			// NOTE: As wide as the counter it snapshots, which does not wrap, so that
+			// the difference against it stays exact however long the stream runs.
+			uint64_t receivedPrior{ 0 };
 			// Packets received at last interval for score calculation.
-			uint32_t receivedPriorScore{ 0 };
+			uint64_t receivedPriorScore{ 0 };
 			// Timing data of the most recent Sender Report received.
 			std::optional<SenderReportTiming> lastSenderReportTiming;
 			// Most recent `abs-capture-time` RTP header extension received.

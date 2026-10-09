@@ -16,6 +16,22 @@ namespace RTC
 	{
 		class RtpStream
 		{
+		public:
+			/**
+			 * Largest jump forward in sequence number taken as a gap within the stream
+			 * rather than as a restart of it.
+			 */
+			static constexpr uint16_t MaxDropout{ 3000 };
+			/**
+			 * How far back a sequence number may land for its packet to be taken as
+			 * reordered rather than as a restart of the stream.
+			 */
+			static constexpr uint16_t MaxMisorder{ 1500 };
+			/**
+			 * Size of the RTP sequence number space, which is where it wraps around.
+			 */
+			static constexpr uint32_t RtpSeqMod{ 1 << 16 };
+
 		protected:
 			class Listener
 			{
@@ -171,6 +187,11 @@ namespace RTC
 				return this->fractionLost;
 			}
 
+			int32_t GetPacketsLost() const
+			{
+				return this->packetsLost;
+			}
+
 			float GetLossPercentage() const
 			{
 				return static_cast<float>(this->fractionLost) * 100 / 256;
@@ -259,17 +280,20 @@ namespace RTC
 			// Jitter in RTP timestamp units. As per spec it's kept as floating value
 			// although it's exposed as integer in the stats.
 			float jitter{ 0 };
-			size_t packetsDiscarded{ 0 };
-			size_t packetsRetransmitted{ 0 };
-			size_t packetsRepaired{ 0 };
-			size_t nackCount{ 0 };
-			size_t nackPacketCount{ 0 };
-			size_t pliCount{ 0 };
-			size_t firCount{ 0 };
+			// NOTE: These counters are never reset and nothing bounds them, so they are
+			// as wide as the stats fields they end up in rather than as wide as a
+			// pointer.
+			uint64_t packetsDiscarded{ 0 };
+			uint64_t packetsRetransmitted{ 0 };
+			uint64_t packetsRepaired{ 0 };
+			uint64_t nackCount{ 0 };
+			uint64_t nackPacketCount{ 0 };
+			uint64_t pliCount{ 0 };
+			uint64_t firCount{ 0 };
 			// Packets repaired at last interval for score calculation.
-			size_t repairedPriorScore{ 0 };
+			uint64_t repairedPriorScore{ 0 };
 			// Packets retransmitted at last interval for score calculation.
-			size_t retransmittedPriorScore{ 0 };
+			uint64_t retransmittedPriorScore{ 0 };
 			// Correspondence between wall clock and RTP timeline given by the last Sender
 			// Report.
 			std::optional<RTP::RtpStream::SenderReportMapping> lastSenderReportMapping;

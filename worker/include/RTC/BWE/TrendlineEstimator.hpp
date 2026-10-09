@@ -27,6 +27,13 @@ namespace RTC
 		class TrendlineEstimator
 		{
 		public:
+			/**
+			 * @remarks
+			 * - Every constraint documented below is checked by the constructor and
+			 *   aborts when it doesn't hold. These options are set from C++ alone,
+			 *   never from the network nor from the API, so breaking one of them is a
+			 *   programming error.
+			 */
 			struct TrendlineEstimatorOptions
 			{
 				/**
@@ -52,10 +59,18 @@ namespace RTC
 				bool enableCap{ false };
 				/**
 				 * How many packets of the beginning of the window that cap looks at.
+				 *
+				 * @remarks
+				 * - While `enableCap` is set it must be at least 1, and the two ends
+				 *   together must fit in `windowSize`, since the cap looks at both of
+				 *   them without them overlapping.
 				 */
 				size_t beginningPackets{ 7 };
 				/**
 				 * How many packets of the end of the window that cap looks at.
+				 *
+				 * @remarks
+				 * - The same constraints as `beginningPackets`.
 				 */
 				size_t endPackets{ 7 };
 				/**
@@ -88,8 +103,8 @@ namespace RTC
 			 * @param sendDeltaUs - Time elapsed between the send times of both groups.
 			 * @param arrivalDeltaUs - Time elapsed between the arrival times of both
 			 *   groups.
-			 * @param arrivalTimeUs - Arrival time of the latest group, in the remote
-			 *   clock reference.
+			 * @param arrivalTimeUs - Instant the latest group arrived at the remote
+			 *   endpoint, anchored to our own clock by the feedback adapter.
 			 */
 			void Update(int64_t sendDeltaUs, int64_t arrivalDeltaUs, int64_t arrivalTimeUs);
 
@@ -134,7 +149,7 @@ namespace RTC
 			double prevTrend{ 0 };
 			std::optional<double> timeOverUsingUs;
 			int overuseCounter{ 0 };
-			std::optional<int64_t> lastThresholdUpdateAtUs;
+			std::optional<int64_t> lastSampleArrivalTimeUs;
 			Types::BandwidthUsage state{ Types::BandwidthUsage::NORMAL };
 		};
 	} // namespace BWE

@@ -9,6 +9,7 @@
 #include "RTC/ConsumerTypes.hpp"
 #include "RTC/ProducerStreamManager.hpp"
 #include "RTC/RTCP/CompoundPacket.hpp"
+#include "RTC/RTCP/Feedback.hpp"
 #include "RTC/RTCP/FeedbackRtpNack.hpp"
 #include "RTC/RTCP/ReceiverReport.hpp"
 #include "RTC/RTP/HeaderExtensionIds.hpp"
@@ -85,7 +86,7 @@ namespace RTC
 		{
 			return this->rtpParameters;
 		}
-		const struct RTC::RTP::HeaderExtensionIds& GetRtpHeaderExtensionIds() const
+		const RTC::RTP::HeaderExtensionIds& GetRtpHeaderExtensionIds() const
 		{
 			return this->rtpHeaderExtensionIds;
 		}
@@ -93,6 +94,16 @@ namespace RTC
 		{
 			return this->type;
 		}
+		/**
+		 * Whether this Consumer was negotiated with transport-cc, which takes both
+		 * the RTP header extension and the RTCP feedback.
+		 */
+		bool SupportsTransportCc() const;
+		/**
+		 * Whether this Consumer was negotiated with REMB, whose RTP header extension
+		 * is abs-send-time.
+		 */
+		bool SupportsRemb() const;
 		RTC::ConsumerTypes::VideoLayers GetPreferredLayers() const
 		{
 			return this->producerStreamManager->GetPreferredLayers();
@@ -153,7 +164,13 @@ namespace RTC
 		uint8_t GetWorstRemoteFractionLost(uint32_t mappedSsrc) const;
 		void ReceiveNack(RTC::RTCP::FeedbackRtpNackPacket* nackPacket);
 		void ReceiveKeyFrameRequest(RTC::RTCP::FeedbackPs::MessageType messageType, uint32_t ssrc);
-		void ReceiveRtcpReceiverReport(RTC::RTCP::ReceiverReport* report, int64_t receivedAtUs);
+		/**
+		 * @returns What the link to the remote endpoint lost and what it was expected
+		 *   to deliver since the previous Receiver Report, or no value if this one
+		 *   measures no interval at all.
+		 */
+		std::optional<RTC::RTP::RtpStreamSend::Loss> ReceiveRtcpReceiverReport(
+		  RTC::RTCP::ReceiverReport* report, int64_t receivedAtUs);
 		void ReceiveRtcpXrReceiverReferenceTime(
 		  RTC::RTCP::ReceiverReferenceTime* report, int64_t receivedAtUs);
 		int64_t GetTransmissionRate(int64_t nowMs);
@@ -214,7 +231,7 @@ namespace RTC
 		RTC::RtpParameters rtpParameters;
 		RTC::RtpParameters::Type type;
 		std::vector<RTC::RtpEncodingParameters> consumableRtpEncodings;
-		struct RTC::RTP::HeaderExtensionIds rtpHeaderExtensionIds;
+		RTC::RTP::HeaderExtensionIds rtpHeaderExtensionIds;
 		const std::vector<uint8_t>* producerRtpStreamScores{ nullptr };
 		// Others.
 		std::bitset<128> supportedCodecPayloadTypes;
@@ -222,7 +239,7 @@ namespace RTC
 		int64_t maxRtcpIntervalMs{ 0 };
 		bool externallyManagedBitrate{ false };
 		uint8_t priority{ 1 };
-		struct TraceEventTypes traceEventTypes;
+		TraceEventTypes traceEventTypes;
 
 	private:
 		bool pipe{ false };

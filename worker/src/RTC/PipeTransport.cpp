@@ -497,6 +497,13 @@ namespace RTC
 		return this->tuple ? true : false;
 	}
 
+	inline size_t PipeTransport::GetPacketOverhead() const
+	{
+		MS_TRACE();
+
+		return this->tuple ? this->tuple->GetPacketOverhead() : 0;
+	}
+
 	inline bool PipeTransport::HasSrtp() const
 	{
 		MS_TRACE();
@@ -505,7 +512,7 @@ namespace RTC
 	}
 
 	void PipeTransport::SendRtpPacket(
-	  RTC::Consumer* /*consumer*/, RTC::RTP::Packet* packet, RTC::Transport::onSendCallback* cb)
+	  RTC::Consumer* /*consumer*/, RTC::RTP::Packet* packet, onSendCallback cb)
 	{
 		MS_TRACE();
 
@@ -513,8 +520,7 @@ namespace RTC
 		{
 			if (cb)
 			{
-				(*cb)(false);
-				delete cb;
+				cb(false);
 			}
 
 			return;
@@ -527,14 +533,13 @@ namespace RTC
 		{
 			if (cb)
 			{
-				(*cb)(false);
-				delete cb;
+				cb(false);
 			}
 
 			return;
 		}
 
-		this->tuple->Send(data, len, cb);
+		this->tuple->Send(data, len, std::move(cb));
 
 		// Increase send transmission.
 		RTC::Transport::DataSent(len);
@@ -589,11 +594,11 @@ namespace RTC
 	}
 
 	void PipeTransport::SendMessage(
-	  RTC::DataConsumer* dataConsumer, RTC::SCTP::Message message, onQueuedCallback* cb)
+	  RTC::DataConsumer* dataConsumer, RTC::SCTP::Message message, onMessageQueuedCallback cb)
 	{
 		MS_TRACE();
 
-		SendSctpMessage(dataConsumer, std::move(message), cb);
+		SendSctpMessage(dataConsumer, std::move(message), std::move(cb));
 	}
 
 	bool PipeTransport::SendData(const uint8_t* data, size_t len)
