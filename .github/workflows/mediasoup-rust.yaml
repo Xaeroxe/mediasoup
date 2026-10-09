@@ -71,6 +71,12 @@ jobs:
             run-test-in-debug-mode: true
           - os: ubuntu-26.04-arm
             run-test-in-debug-mode: true
+          # Ubuntu 24.04's OpenSSL 3.0 and a later one.
+          - os: ubuntu-24.04
+            system-openssl: true
+          - os: ubuntu-26.04
+            system-openssl: true
+            run-test-in-debug-mode: true
           - os: macos-15
             run-test-in-debug-mode: true
           - os: windows-2022
@@ -82,6 +88,7 @@ jobs:
 
     env:
       MEDIASOUP_LOCAL_DEV: 'true'
+      CARGO_FEATURES: ${{ matrix.build.system-openssl && '--features mediasoup-sys/system-openssl' || '' }}
 
     steps:
       - name: Checkout
@@ -97,12 +104,19 @@ jobs:
           restore-keys: |
             ${{ matrix.build.os }}-cargo-
 
+      - if: ${{ matrix.build.system-openssl }}
+        name: apt install libssl-dev pkg-config
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libssl-dev pkg-config
+          echo "OpenSSL $(pkg-config --modversion openssl)"
+
       - if: ${{ matrix.build.run-cargo-fmt }}
         name: cargo fmt --all -- --check
         run: cargo fmt --all -- --check
 
       - name: cargo clippy --all-targets -- -D warnings
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets ${{ env.CARGO_FEATURES }} -- -D warnings
 
       # NOTE: On Windows build.rs builds and tests libmediasoupworker in release
       # mode even for a debug `cargo test`, so running the debug pass there would
@@ -111,10 +125,22 @@ jobs:
       # release pass always runs.
       - if: ${{ matrix.build.run-test-in-debug-mode }}
         name: cargo test --verbose
-        run: cargo test --verbose
+        run: cargo test --verbose ${{ env.CARGO_FEATURES }}
 
       - name: cargo test --release --verbose
-        run: cargo test --release --verbose
+        run: cargo test --release --verbose ${{ env.CARGO_FEATURES }}
+
+      # The integration tests load the system libssl and libcrypto, and take
+      # OpenSSL's functions from them: a statically linked copy would leave
+      # `SSL_CTX_new` defined in the executable rather than undefined.
+      - if: ${{ matrix.build.system-openssl }}
+        name: Check that the tests link the system OpenSSL
+        run: |
+          set -euo pipefail
+          exe=$(cargo test --release --no-run --message-format=json ${{ env.CARGO_FEATURES }} \
+            | jq -r 'select(.target.name == "integration" and .executable != null) | .executable')
+          ldd "$exe" | grep -E 'lib(ssl|crypto)\.so\.3'
+          nm -D --undefined-only "$exe" | grep -w SSL_CTX_new
 
       - name: cargo doc --locked --all --no-deps --lib
         run: cargo doc --locked --all --no-deps --lib
