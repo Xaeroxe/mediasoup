@@ -252,10 +252,9 @@ fn main() {
     println!("cargo:rustc-link-search=native={out_dir}");
 
     // After the worker, so the linker sees what it needs from them.
-    if cfg!(feature = "system-openssl") {
-        pkg_config::Config::new()
-            .atleast_version("3.0.0")
-            .probe("openssl")
-            .expect("The system-openssl feature needs OpenSSL 3 and its pkg-config file");
-    }
+    #[cfg(feature = "system-openssl")]
+    pkg_config::Config::new()
+        .atleast_version("3.0.0")
+        .probe("openssl")
+        .expect("The system-openssl feature needs OpenSSL 3 and its pkg-config file");
 }
